@@ -1,0 +1,4 @@
+[versions]
+spring-boot = "3.2.3"
+dependency-management = "1.1.5"
+lombok = "1.18.42"
