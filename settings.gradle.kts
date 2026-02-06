@@ -9,3 +9,4 @@
 rootProject.name = "kalamburya-platform"
 include("common")
 include("user-service")
+include("gateway-service")
