@@ -7,6 +7,6 @@
  */
 
 rootProject.name = "kalamburya-platform"
-include("common")
+include("common-library")
 include("user-service")
 include("gateway-service")
