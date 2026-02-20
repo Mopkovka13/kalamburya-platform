@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: user-service
+  flyway:
+    enabled: true
+  jooq:
+    sql-dialect: postgres
+  kafka:
+    consumer:
+      group-id: user-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "ru.mopkovka.common"
+        spring.json.value.default.type: "ru.mopkovka.common.UserAuthenticatedEvent"
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always

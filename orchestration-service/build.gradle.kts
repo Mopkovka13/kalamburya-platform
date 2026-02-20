@@ -6,9 +6,14 @@ plugins {
 
 dependencies {
     implementation(project(":auth-common"))
+    implementation(project(":common-library"))
     implementation(libs.spring.boot.starter.actuator)
-    implementation(libs.spring.boot.starter.webflux)
-    implementation(libs.spring.cloud.gateway)
+    implementation(libs.spring.boot.starter.web)
+    implementation(libs.spring.boot.starter.oauth2.client)
     implementation(libs.spring.cloud.eureka.client)
     implementation(libs.spring.cloud.vault.config)
+    implementation(libs.spring.kafka)
+
+    compileOnly(libs.lombok)
+    annotationProcessor(libs.lombok)
 }

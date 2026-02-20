@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: orchestration-service
+  config:
+    import: vault://
+  cloud:
+    vault:
+      kv:
+        enabled: true
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${client-id}        # из Vault secret/orchestration-service
+            client-secret: ${client-secret}
+            redirect-uri: ${app.base-url}/login/oauth2/code/google
+            scope: openid,email,profile
+  kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+server:
+  port: 8082
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always
+
+app:
+  base-url: ~         # обязательно задать в профиле или через APP_BASE_URL
+  frontend-url: ~     # обязательно задать в профиле или через APP_FRONTEND_URL
+
+jwt:
+  # jwt.secret берётся из Vault secret/application
+  access-expiry-seconds: 900
+  refresh-expiry-seconds: 604800
