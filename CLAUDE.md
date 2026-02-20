@@ -10,51 +10,90 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # Build a specific module
 ./gradlew :user-service:build
+./gradlew :orchestration-service:build
 ./gradlew :gateway-service:build
-./gradlew :common-library:build
+./gradlew :eureka-server:build
 
-# Run a service locally
-./gradlew :user-service:bootRun
-./gradlew :gateway-service:bootRun
+# Run services locally (use dev profile for local infra URLs)
+SPRING_PROFILES_ACTIVE=dev ./gradlew :eureka-server:bootRun
+SPRING_PROFILES_ACTIVE=dev ./gradlew :orchestration-service:bootRun
+SPRING_PROFILES_ACTIVE=dev ./gradlew :gateway-service:bootRun
+SPRING_PROFILES_ACTIVE=dev ./gradlew :user-service:bootRun
 
 # Run tests
 ./gradlew test
 ./gradlew :user-service:test
 
-# Start local infrastructure (Kafka, PostgreSQL)
+# Start all infrastructure (PostgreSQL, Kafka, Vault, Eureka in Docker)
 docker compose up -d
+
+# Regenerate jOOQ classes from live DB (requires local.properties and running postgres)
+./gradlew :user-service:generateJooq
 ```
+
+### Local development setup
+
+1. Copy `local.properties.example` → `local.properties` and fill in jOOQ DB credentials.
+2. `docker compose up -d` — starts PostgreSQL, Kafka/Zookeeper, Kafka UI, Vault, and Eureka server.
+3. Populate Vault secrets via the `vault-init` container (runs automatically on `docker compose up`); for re-init: `docker compose run --rm vault-init`.
+4. Start backend services with `SPRING_PROFILES_ACTIVE=dev` (see `application-dev.yml` in each module for local URL overrides).
+5. Frontend: `cd frontend && npm install && npm run dev` (runs on port 3000).
 
 ## Architecture Overview
 
-This is an early-stage Spring Boot microservices platform using a multi-module Gradle build.
+OAuth2 Google login platform using Spring Boot microservices.
 
-**Request flow:**
-```
-Client → Gateway Service (port 8081) → User Service (port 8080)
-```
+**Service ports:**
+| Service | Port |
+|---|---|
+| Frontend (Vite/React) | 3000 |
+| gateway-service | 8081 |
+| orchestration-service (auth) | 8082 |
+| user-service | 8080 |
+| eureka-server | 8761 |
+| Vault | 8200 |
+| PostgreSQL | 5432 |
+| Kafka (host) | 9093 |
+| Kafka UI | 8888 |
 
-The gateway routes `/users/**` paths to the user-service via Spring Cloud Gateway (reactive/Webflux). The user-service uses Spring MVC (servlet-based). Note that mixing reactive and servlet stacks is intentional here — gateway uses Webflux, downstream services use MVC.
+**Authentication flow:**
+```
+1. Frontend → /auth/login/oauth2/google  (via gateway → orchestration-service)
+2. Google OAuth2 callback → orchestration-service
+3. OAuth2SuccessHandler: issues JWT pair, stores access token in AuthCodeStore (30s TTL),
+   sets refresh_token HttpOnly cookie, redirects → frontend /home?code=<uuid>
+4. Frontend POSTs code to POST /auth/token → receives access token
+5. All subsequent API calls: Authorization: Bearer <access-token> → gateway
+6. JwtAuthFilter (gateway) validates JWT, injects X-User-Id header, forwards downstream
+7. orchestration-service publishes UserAuthenticatedEvent to Kafka topic "user-authenticated"
+8. user-service consumes event: upserts user in PostgreSQL via jOOQ,
+   publishes UserRegisteredEvent or UserLoggedInEvent
+```
 
 **Modules:**
-- `common-library` — shared code imported by other services (Java library, no Spring)
-- `gateway-service` — Spring Cloud Gateway; all routing config lives in `gateway-service/src/main/resources/application.yml`
-- `user-service` — Spring MVC REST service; currently has a stub `GET /users` endpoint
-
-**Infrastructure (docker-compose.yaml):**
-- PostgreSQL 15 on port 5432 (`userdb`, user: `user_service`) for the user-service
-- Kafka + Zookeeper on port 9092 (Confluent 7.5.0) — infrastructure is ready but not yet used in code
-- Kafka UI on port 8888
+- `auth-common` — `JwtService` (plain Java, no Spring); shared by gateway-service and orchestration-service for JWT sign/verify
+- `common-library` — Kafka event records (`UserAuthenticatedEvent`, `UserRegisteredEvent`, `UserLoggedInEvent`) and `KafkaTopics` constants; no Spring dependency
+- `eureka-server` — Netflix Eureka; gateway and all services register here for `lb://` load-balanced routing
+- `gateway-service` — Spring Cloud Gateway (Webflux); `JwtAuthFilter` validates JWT and injects `X-User-Id`; routes `/auth/**` → `lb://orchestration-service`, `/users/**` → `lb://user-service`
+- `orchestration-service` — Spring MVC; Google OAuth2 login; JWT issuance; `AuthCodeStore` (in-memory, single-instance only); Kafka producer
+- `user-service` — Spring MVC; Kafka consumer (`user-authenticated` topic); jOOQ + Flyway for PostgreSQL; `UserRepository` with `existsByGoogleSub`, `insert`, `updateLastLogin`
+- `frontend` — React + TypeScript + Vite SPA; `AuthContext` manages access token in memory; `authApi` axios instance points directly at orchestration-service (port 8082, not via gateway)
 
 ## Tech Stack
 
 - Java 21, Spring Boot 3.2.3, Spring Cloud 2023.0.3
 - Gradle 9.3.0 with version catalog at `gradle/libs.versions.toml`
-- Lombok used in user-service
-- Build features enabled: configuration cache, parallel builds, build cache
+- Lombok used in user-service and orchestration-service
+- jOOQ (type-safe SQL) + Flyway (migrations) in user-service; generated classes at `user-service/src/generated/jooq`
+- HashiCorp Vault (dev mode) for secrets: `jwt.secret` in `secret/application`, OAuth2 credentials in `secret/orchestration-service`
+- Kafka (Confluent 7.5.0); JSON serialization; trusted package `ru.mopkovka.common`
 
 ## Key Conventions
 
 - Group ID: `ru.mopkovka`
-- All dependency versions are managed centrally in `gradle/libs.versions.toml`
-- Submodule dependencies (e.g., `common-library`) are referenced via `project(":common-library")` in module `build.gradle.kts` files
+- All dependency versions managed in `gradle/libs.versions.toml`
+- Submodule dependencies use `project(":module-name")` in `build.gradle.kts`
+- `application-dev.yml` in each service overrides Vault URI, Eureka URL, Kafka bootstrap servers, and app base URLs for local development
+- Gateway and user-service stacks intentionally differ: gateway = Webflux (reactive), downstream services = Spring MVC (servlet)
+- `AuthCodeStore` is in-memory and single-instance only; not suitable for multi-instance deployments
+- jOOQ codegen reads DB credentials from env vars (`JOOQ_DB_URL`, `JOOQ_DB_USER`, `JOOQ_DB_PASSWORD`) or `local.properties`
