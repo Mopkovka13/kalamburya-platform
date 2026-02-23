@@ -88,7 +88,7 @@ services:
       - ./vault/config.hcl:/vault/config/config.hcl:ro
     cap_add:
       - IPC_LOCK
-    command: vault server -config=/vault/config/config.hcl
+    command: server
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- 'http://localhost:8200/v1/sys/health?sealedok=true&uninitok=true' > /dev/null"]
       interval: 10s
