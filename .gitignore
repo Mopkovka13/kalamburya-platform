@@ -9,5 +9,3 @@ build
 
 .idea
 
-# Local build-time secrets (jOOQ credentials, etc.) — не коммитить
-local.properties

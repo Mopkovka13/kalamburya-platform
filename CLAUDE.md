@@ -24,20 +24,39 @@ SPRING_PROFILES_ACTIVE=dev ./gradlew :user-service:bootRun
 ./gradlew test
 ./gradlew :user-service:test
 
-# Start all infrastructure (PostgreSQL, Kafka, Vault, Eureka in Docker)
+# Start local infrastructure (PostgreSQL, Kafka, Eureka in Docker)
 docker compose up -d
 
-# Regenerate jOOQ classes from live DB (requires local.properties and running postgres)
+# Regenerate jOOQ classes from SQL migrations (no live DB needed)
 ./gradlew :user-service:generateJooq
 ```
 
 ### Local development setup
 
-1. Copy `local.properties.example` → `local.properties` and fill in jOOQ DB credentials.
-2. `docker compose up -d` — starts PostgreSQL, Kafka/Zookeeper, Kafka UI, Vault, and Eureka server.
-3. Populate Vault secrets via the `vault-init` container (runs automatically on `docker compose up`); for re-init: `docker compose run --rm vault-init`.
-4. Start backend services with `SPRING_PROFILES_ACTIVE=dev` (see `application-dev.yml` in each module for local URL overrides).
-5. Frontend: `cd frontend && npm install && npm run dev` (runs on port 3000).
+1. Убедись, что в `.env` указан правильный хост удалённой машины (по умолчанию `mopkovka.sytes.net`):
+   ```
+   REMOTE_HOST=mopkovka.sytes.net
+   ```
+   Этот хост используется в `docker-compose.yaml` и во всех `application-dev.yml`.
+2. `docker compose up -d` — starts PostgreSQL, Kafka/Zookeeper, Kafka UI, and Eureka server.
+2. Vault работает в server mode с persistent volume (`vault_data`) — секреты переживают рестарты. При первом запуске нужно вручную инициализировать и заполнить:
+   ```bash
+   # Инициализация (один раз, сохрани unseal key и root token)
+   vault operator init -key-shares=1 -key-threshold=1
+   vault operator unseal <unseal-key>
+   vault login <root-token>
+
+   # Создать токен для приложений
+   vault token create -policy=root -id=dev-vault-token -orphan
+
+   # Включить KV v2 и записать секреты
+   vault secrets enable -path=secret kv-v2
+   vault kv put secret/application jwt.secret=...
+   vault kv put secret/orchestration-service client-id=... client-secret=...
+   ```
+   После рестарта контейнера нужно только разопечатать: `vault operator unseal <unseal-key>`. Токен для приложений: `dev-vault-token`.
+3. Start backend services with `SPRING_PROFILES_ACTIVE=dev` (see `application-dev.yml` in each module for local URL overrides).
+4. Frontend: `cd frontend && npm install && npm run dev` (runs on port 3000).
 
 ## Architecture Overview
 
@@ -51,7 +70,7 @@ OAuth2 Google login platform using Spring Boot microservices.
 | orchestration-service (auth) | 8082 |
 | user-service | 8080 |
 | eureka-server | 8761 |
-| Vault | 8200 |
+| Vault | ${REMOTE_HOST}:8200 |
 | PostgreSQL | 5432 |
 | Kafka (host) | 9093 |
 | Kafka UI | 8888 |
@@ -96,4 +115,4 @@ OAuth2 Google login platform using Spring Boot microservices.
 - `application-dev.yml` in each service overrides Vault URI, Eureka URL, Kafka bootstrap servers, and app base URLs for local development
 - Gateway and user-service stacks intentionally differ: gateway = Webflux (reactive), downstream services = Spring MVC (servlet)
 - `AuthCodeStore` is in-memory and single-instance only; not suitable for multi-instance deployments
-- jOOQ codegen reads DB credentials from env vars (`JOOQ_DB_URL`, `JOOQ_DB_USER`, `JOOQ_DB_PASSWORD`) or `local.properties`
+- jOOQ codegen uses `DDLDatabase` — reads SQL migrations directly, no live DB connection needed

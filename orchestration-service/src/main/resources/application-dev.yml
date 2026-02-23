@@ -1,16 +1,20 @@
+remote-host: ${REMOTE_HOST:mopkovka.sytes.net}
+
 spring:
+  config:
+    import: vault://
   cloud:
     vault:
-      uri: http://mopkovka.sytes.net:8200
-      token: root
+      uri: http://${remote-host}:8200
+      token: dev-vault-token
   kafka:
-    bootstrap-servers: mopkovka.sytes.net:9093
+    bootstrap-servers: ${remote-host}:9093
 
 eureka:
   client:
     service-url:
-      defaultZone: http://mopkovka.sytes.net:8761/eureka/
+      defaultZone: http://${remote-host}:8761/eureka/
 
 app:
-  base-url: http://mopkovka.sytes.net:8082
-  frontend-url: http://mopkovka.sytes.net:3000
+  base-url: http://${remote-host}:8082
+  frontend-url: http://${remote-host}:3000

@@ -1,11 +1,13 @@
+remote-host: ${REMOTE_HOST:mopkovka.sytes.net}
+
 spring:
   datasource:
-    url: jdbc:postgresql://mopkovka.sytes.net:5432/userdb
+    url: jdbc:postgresql://${remote-host}:5432/userdb
     username: user_service
     password: user_pw
     driver-class-name: org.postgresql.Driver
   kafka:
-    bootstrap-servers: mopkovka.sytes.net:9093
+    bootstrap-servers: ${remote-host}:9093
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -13,4 +15,4 @@ spring:
 eureka:
   client:
     service-url:
-      defaultZone: http://mopkovka.sytes.net:8761/eureka/
+      defaultZone: http://${remote-host}:8761/eureka/

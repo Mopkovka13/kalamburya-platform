@@ -1,7 +1,0 @@
-# Скопируй этот файл в local.properties и заполни значениями.
-# local.properties добавлен в .gitignore — не коммить его.
-
-# jOOQ codegen credentials (используются только при ./gradlew generateJooq)
-jooq.db.url=jdbc:postgresql://localhost:5432/userdb
-jooq.db.user=user_service
-jooq.db.password=user_pw
