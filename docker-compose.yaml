@@ -84,7 +84,7 @@ services:
     ports:
       - "8200:8200"
     volumes:
-      - vault_data:/vault/data
+      - vault_data:/vault/file
       - ./vault/config.hcl:/vault/config/config.hcl:ro
     cap_add:
       - IPC_LOCK
