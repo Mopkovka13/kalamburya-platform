@@ -1,10 +1,10 @@
 spring:
   cloud:
     vault:
-      uri: http://localhost:8200
+      uri: http://mopkovka.sytes.net:8200
       token: root
 
 eureka:
   client:
     service-url:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: http://mopkovka.sytes.net:8761/eureka/
