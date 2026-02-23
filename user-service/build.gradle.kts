@@ -1,4 +1,4 @@
-import java.util.Properties
+import org.jooq.meta.jaxb.Property
 
 plugins {
     alias(libs.plugins.spring.boot)
@@ -17,21 +17,11 @@ dependencies {
     implementation(libs.spring.cloud.eureka.client)
     implementation(libs.spring.kafka)
 
-    jooqGenerator(libs.postgresql)
+    jooqGenerator("org.jooq:jooq-meta-extensions:${versionCatalogs.named("libs").findVersion("jooq").get().requiredVersion}")
 
     compileOnly(libs.lombok)
     annotationProcessor(libs.lombok)
 }
-
-val localProps = Properties().also { props: Properties ->
-    val f = rootProject.file("local.properties")
-    if (f.exists()) props.load(f.inputStream())
-}
-
-fun prop(envKey: String, localKey: String, default: String): String =
-    providers.environmentVariable(envKey).orNull
-        ?: localProps.getProperty(localKey)
-        ?: default
 
 val jooqVersion: String = versionCatalogs.named("libs").findVersion("jooq").get().requiredVersion
 
@@ -40,17 +30,18 @@ jooq {
     configurations {
         create("main") {
             jooqConfiguration.apply {
-                jdbc.apply {
-                    driver = "org.postgresql.Driver"
-                    url = prop("JOOQ_DB_URL", "jooq.db.url", "jdbc:postgresql://localhost:5432/userdb")
-                    user = prop("JOOQ_DB_USER", "jooq.db.user", "user_service")
-                    password = prop("JOOQ_DB_PASSWORD", "jooq.db.password", "user_pw")
-                }
                 generator.apply {
                     database.apply {
-                        name = "org.jooq.meta.postgres.PostgresDatabase"
-                        inputSchema = "public"
+                        name = "org.jooq.meta.extensions.ddl.DDLDatabase"
                         includes = "users"
+                        properties.add(Property().apply {
+                            key = "scripts"
+                            value = "src/main/resources/db/migration/*.sql"
+                        })
+                        properties.add(Property().apply {
+                            key = "sort"
+                            value = "flyway"
+                        })
                     }
                     target.apply {
                         packageName = "ru.mopkovka.jooq"

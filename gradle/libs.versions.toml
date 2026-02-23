@@ -1,11 +1,11 @@
 [versions]
-spring-boot = "3.2.3"
+spring-boot = "3.4.2"
 dependency-management = "1.1.7"
 lombok = "1.18.42"
-spring-cloud = "2023.0.3"
+spring-cloud = "2024.0.1"
 jjwt = "0.12.6"
 jooq-plugin = "9.0"
-jooq = "3.18.14"
+jooq = "3.19.18"
 postgresql = "42.7.3"
 flyway = "10.8.1"
 
