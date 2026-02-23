@@ -1,6 +1,6 @@
 [versions]
 spring-boot = "3.2.3"
-dependency-management = "1.1.5"
+dependency-management = "1.1.7"
 lombok = "1.18.42"
 spring-cloud = "2023.0.3"
 jjwt = "0.12.6"
