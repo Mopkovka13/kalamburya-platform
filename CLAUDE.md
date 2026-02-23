@@ -39,22 +39,9 @@ docker compose up -d
    ```
    Этот хост используется в `docker-compose.yaml` и во всех `application-dev.yml`.
 2. `docker compose up -d` — starts PostgreSQL, Kafka/Zookeeper, Kafka UI, and Eureka server.
-2. Vault работает в server mode с persistent volume (`vault_data`) — секреты переживают рестарты. При первом запуске нужно вручную инициализировать и заполнить:
-   ```bash
-   # Инициализация (один раз, сохрани unseal key и root token)
-   vault operator init -key-shares=1 -key-threshold=1
-   vault operator unseal <unseal-key>
-   vault login <root-token>
-
-   # Создать токен для приложений
-   vault token create -policy=root -id=dev-vault-token -orphan
-
-   # Включить KV v2 и записать секреты
-   vault secrets enable -path=secret kv-v2
-   vault kv put secret/application jwt.secret=...
-   vault kv put secret/orchestration-service client-id=... client-secret=...
-   ```
-   После рестарта контейнера нужно только разопечатать: `vault operator unseal <unseal-key>`. Токен для приложений: `dev-vault-token`.
+2. Скопируй `.env.secrets.example` → `.env.secrets` и заполни секретами. Vault (dev mode) заполняется автоматически при `docker compose up` через сервис `vault-init`:
+   - `secret/application` → `jwt.secret`
+   - `secret/orchestration-service` → `client-id`, `client-secret` (Google OAuth2)
 3. Start backend services with `SPRING_PROFILES_ACTIVE=dev` (see `application-dev.yml` in each module for local URL overrides).
 4. Frontend: `cd frontend && npm install && npm run dev` (runs on port 3000).
 

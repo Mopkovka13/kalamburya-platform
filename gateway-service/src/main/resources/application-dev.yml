@@ -6,7 +6,7 @@ spring:
   cloud:
     vault:
       uri: http://${remote-host}:8200
-      token: dev-vault-token
+      token: root
 
 eureka:
   client:

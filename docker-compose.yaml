@@ -83,19 +83,35 @@ services:
     container_name: vault
     ports:
       - "8200:8200"
-    volumes:
-      - vault_data:/vault/file
-      - ./vault/config.hcl:/vault/config/config.hcl:ro
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: root
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
     cap_add:
       - IPC_LOCK
-    command: server
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- 'http://localhost:8200/v1/sys/health?sealedok=true&uninitok=true' > /dev/null"]
+      test: ["CMD-SHELL", "vault status -address=http://localhost:8200"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 5s
 
+  vault-init:
+    image: hashicorp/vault:latest
+    container_name: vault-init
+    depends_on:
+      vault:
+        condition: service_healthy
+    env_file:
+      - .env.secrets
+    environment:
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: root
+    command: >
+      sh -c "
+        vault kv put secret/application jwt.secret=$$JWT_SECRET &&
+        vault kv put secret/orchestration-service client-id=$$GOOGLE_CLIENT_ID client-secret=$$GOOGLE_CLIENT_SECRET
+      "
+    restart: "no"
+
 volumes:
   user_pg_data:
-  vault_data:

@@ -9,3 +9,6 @@ build
 
 .idea
 
+# Секреты для Vault — не коммитить
+.env.secrets
+
