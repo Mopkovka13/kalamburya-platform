@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.spring.boot)
     alias(libs.plugins.dependency.management)
@@ -21,7 +23,7 @@ dependencies {
     annotationProcessor(libs.lombok)
 }
 
-val localProps = java.util.Properties().also { props ->
+val localProps = Properties().also { props: Properties ->
     val f = rootProject.file("local.properties")
     if (f.exists()) props.load(f.inputStream())
 }
@@ -31,8 +33,10 @@ fun prop(envKey: String, localKey: String, default: String): String =
         ?: localProps.getProperty(localKey)
         ?: default
 
+val jooqVersion: String = versionCatalogs.named("libs").findVersion("jooq").get().requiredVersion
+
 jooq {
-    version.set(libs.versions.jooq.get())
+    version.set(jooqVersion)
     configurations {
         create("main") {
             jooqConfiguration.apply {
