@@ -7,9 +7,7 @@
  */
 
 rootProject.name = "kalamburya-platform"
-include("auth-common")
-include("common-library")
-include("user-service")
-include("gateway-service")
-include("eureka-server")
-include("orchestration-service")
+
+listOf("auth-common", "common-library", "user-service", "gateway-service", "eureka-server", "orchestration-service")
+    .filter { file(it).isDirectory }
+    .forEach { include(it) }
