@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import authApi from '../api/authApi'
 
 interface AuthContextValue {
@@ -13,10 +13,26 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const authStarted = useRef(false)
 
   useEffect(() => {
-    authApi.post<{ accessToken: string }>('/auth/refresh')
-      .then(res => setToken(res.data.accessToken))
+    if (authStarted.current) return
+    authStarted.current = true
+
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('code')
+
+    const authenticate = code
+      ? authApi.post<{ accessToken: string }>('/auth/token', null, { params: { code } })
+      : authApi.post<{ accessToken: string }>('/auth/refresh')
+
+    authenticate
+      .then(res => {
+        setToken(res.data.accessToken)
+        if (code) {
+          window.history.replaceState({}, '', window.location.pathname)
+        }
+      })
       .catch(() => setToken(null))
       .finally(() => setLoading(false))
   }, [])

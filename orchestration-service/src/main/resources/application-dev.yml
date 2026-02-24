@@ -16,5 +16,6 @@ eureka:
       defaultZone: http://${remote-host}:8761/eureka/
 
 app:
-  base-url: http://${remote-host}:8082
-  frontend-url: http://${remote-host}:3000
+  base-url: http://localhost:8081
+  frontend-url: http://localhost:3000
+  cookie-secure: false

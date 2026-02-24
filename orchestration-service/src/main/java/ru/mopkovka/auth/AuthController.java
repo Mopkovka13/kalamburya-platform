@@ -1,10 +1,14 @@
 package ru.mopkovka.auth;
 
 import io.jsonwebtoken.Claims;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.ResponseCookie;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,6 +25,9 @@ public class AuthController {
 
     private final JwtService jwtService;
     private final AuthCodeStore authCodeStore;
+
+    @Value("${app.cookie-secure}")
+    private boolean cookieSecure;
 
     @PostMapping("/token")
     public ResponseEntity<Map<String, String>> exchangeCode(@RequestParam String code) {
@@ -48,9 +55,17 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(HttpServletResponse response) {
+    public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response) {
+        SecurityContextHolder.clearContext();
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            session.invalidate();
+        }
+
         ResponseCookie cookie = ResponseCookie.from("refresh_token", "")
                 .httpOnly(true)
+                .secure(cookieSecure)
+                .sameSite("Lax")
                 .path("/auth/refresh")
                 .maxAge(0)
                 .build();

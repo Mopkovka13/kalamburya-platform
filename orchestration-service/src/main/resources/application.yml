@@ -34,6 +34,7 @@ management:
 app:
   base-url: ~         # обязательно задать в профиле или через APP_BASE_URL
   frontend-url: ~     # обязательно задать в профиле или через APP_FRONTEND_URL
+  cookie-secure: true
 
 jwt:
   # jwt.secret берётся из Vault secret/application

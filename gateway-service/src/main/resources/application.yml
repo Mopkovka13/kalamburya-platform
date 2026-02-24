@@ -7,6 +7,10 @@ spring:
         enabled: true
     gateway:
       routes:
+        - id: oauth2-flow
+          uri: lb://orchestration-service
+          predicates:
+            - Path=/oauth2/**,/login/**
         - id: auth-service
           uri: lb://orchestration-service
           predicates:

@@ -37,7 +37,7 @@ const styles: Record<string, React.CSSProperties> = {
 
 export default function LoginPage() {
   const handleLogin = () => {
-    window.location.href = 'http://localhost:8082/oauth2/authorization/google'
+    window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:8081'}/oauth2/authorization/google`
   }
 
   return (
