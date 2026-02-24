@@ -38,12 +38,12 @@ docker compose up -d
    REMOTE_HOST=mopkovka.sytes.net
    ```
    Этот хост используется в `docker-compose.yaml` и во всех `application-dev.yml`.
-2. `docker compose up -d` — starts PostgreSQL, Kafka/Zookeeper, Kafka UI, and Eureka server.
-2. Скопируй `.env.secrets.example` → `.env.secrets` и заполни секретами. Vault (dev mode) заполняется автоматически при `docker compose up` через сервис `vault-init`:
+2. `docker compose up -d` — starts PostgreSQL, Kafka/Zookeeper, Kafka UI, Vault, vault-init, and Eureka server.
+3. Скопируй `.env.secrets.example` → `.env.secrets` и заполни секретами. Vault (dev mode) заполняется автоматически при `docker compose up` через сервис `vault-init`:
    - `secret/application` → `jwt.secret`
    - `secret/orchestration-service` → `client-id`, `client-secret` (Google OAuth2)
-3. Start backend services with `SPRING_PROFILES_ACTIVE=dev` (see `application-dev.yml` in each module for local URL overrides).
-4. Frontend: `cd frontend && npm install && npm run dev` (runs on port 3000).
+4. Start backend services with `SPRING_PROFILES_ACTIVE=dev` (see `application-dev.yml` in each module for local URL overrides).
+5. Frontend: `cd frontend && npm install && npm run dev` (runs on port 3000).
 
 ## Architecture Overview
 
@@ -62,9 +62,9 @@ OAuth2 Google login platform using Spring Boot microservices.
 | Kafka (host) | 9093 |
 | Kafka UI | 8888 |
 
-**Authentication flow:**
+**Authentication flow (intended design):**
 ```
-1. Frontend → /auth/login/oauth2/google  (via gateway → orchestration-service)
+1. Frontend → /oauth2/authorization/google  (currently direct to orchestration-service:8082, should go via gateway)
 2. Google OAuth2 callback → orchestration-service
 3. OAuth2SuccessHandler: issues JWT pair, stores access token in AuthCodeStore (30s TTL),
    sets refresh_token HttpOnly cookie, redirects → frontend /home?code=<uuid>
@@ -75,6 +75,7 @@ OAuth2 Google login platform using Spring Boot microservices.
 8. user-service consumes event: upserts user in PostgreSQL via jOOQ,
    publishes UserRegisteredEvent or UserLoggedInEvent
 ```
+**Known bug:** Step 4 is broken — frontend reads `token` param instead of `code` and treats the value as a raw JWT instead of exchanging it via POST /auth/token.
 
 **Modules:**
 - `auth-common` — `JwtService` (plain Java, no Spring); shared by gateway-service and orchestration-service for JWT sign/verify
@@ -87,7 +88,7 @@ OAuth2 Google login platform using Spring Boot microservices.
 
 ## Tech Stack
 
-- Java 21, Spring Boot 3.2.3, Spring Cloud 2023.0.3
+- Java 21, Spring Boot 3.4.2, Spring Cloud 2024.0.1
 - Gradle 9.3.0 with version catalog at `gradle/libs.versions.toml`
 - Lombok used in user-service and orchestration-service
 - jOOQ (type-safe SQL) + Flyway (migrations) in user-service; generated classes at `user-service/src/generated/jooq`
@@ -103,3 +104,8 @@ OAuth2 Google login platform using Spring Boot microservices.
 - Gateway and user-service stacks intentionally differ: gateway = Webflux (reactive), downstream services = Spring MVC (servlet)
 - `AuthCodeStore` is in-memory and single-instance only; not suitable for multi-instance deployments
 - jOOQ codegen uses `DDLDatabase` — reads SQL migrations directly, no live DB connection needed
+- user-service does NOT use Vault — database credentials are in `application-dev.yml`, unlike gateway and orchestration which use `spring-cloud-vault-config`
+- Gateway only routes `/auth/**` and `/users/**`; OAuth2 paths (`/oauth2/**`, `/login/**`) are NOT routed — frontend currently bypasses gateway for the entire OAuth2 flow
+- **Known issue:** `flyway-database-postgresql` dependency is missing in user-service — required since Flyway 10.x
+- **Known issue:** Frontend bypasses gateway and talks directly to orchestration-service (port 8082); hardcoded `localhost` URLs prevent non-local deployments
+- **Known issue:** `refresh_token` cookie is missing `Secure` and `SameSite` flags (security risk)
