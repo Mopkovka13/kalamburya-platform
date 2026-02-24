@@ -12,3 +12,8 @@ build
 # Секреты для Vault — не коммитить
 .env.secrets
 
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
