@@ -67,7 +67,7 @@ services:
       KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
 
   user-service-postgres:
-    image: postgres:15
+    image: postgres:17
     container_name: user-service-postgres
     ports:
       - "5432:5432"
