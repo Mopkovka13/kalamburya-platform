@@ -32,6 +32,7 @@ spring-cloud-vault-config    = { module = "org.springframework.cloud:spring-clou
 # Database
 postgresql    = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
 flyway-core   = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
+flyway-database-postgresql = { module = "org.flywaydb:flyway-database-postgresql", version.ref = "flyway" }
 
 # Lombok
 lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }

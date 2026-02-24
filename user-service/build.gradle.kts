@@ -13,6 +13,7 @@ dependencies {
     implementation(libs.spring.boot.starter.web)
     implementation(libs.spring.boot.starter.jooq)
     implementation(libs.flyway.core)
+    runtimeOnly(libs.flyway.database.postgresql)
     implementation(libs.postgresql)
     implementation(libs.spring.cloud.eureka.client)
     implementation(libs.spring.kafka)
