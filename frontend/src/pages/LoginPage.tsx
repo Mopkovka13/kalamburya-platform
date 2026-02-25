@@ -3,14 +3,32 @@ import CarrotBackground from '../components/CarrotBackground'
 
 const MILESTONES = [128, 256, 512, 1024]
 
+function getBombCount(eaten: number): number {
+  if (eaten >= 512) return 12
+  if (eaten >= 256) return 6
+  if (eaten >= 128) return 3
+  return 0
+}
+
+// Returns the last fully reached milestone (the "floor" checkpoint)
+function getCheckpoint(eaten: number): number {
+  let checkpoint = 0
+  for (const m of MILESTONES) {
+    if (eaten >= m) checkpoint = m
+    else break
+  }
+  return checkpoint
+}
+
 export default function LoginPage() {
   const [eaten, setEaten] = useState(0)
   const [easterEgg, setEasterEgg] = useState(false)
   const [closing, setClosing] = useState(false)
-  const [curtainProgress, setCurtainProgress] = useState(0) // 0..1
+  const [curtainProgress, setCurtainProgress] = useState(0)
 
   const currentMilestone = MILESTONES.find(m => eaten < m) ?? MILESTONES[MILESTONES.length - 1]
   const unlocked = eaten >= MILESTONES[0]
+  const bombCount = getBombCount(eaten)
 
   const handleEat = useCallback(() => {
     setEaten(prev => {
@@ -20,6 +38,10 @@ export default function LoginPage() {
       }
       return next
     })
+  }, [])
+
+  const handleBomb = useCallback(() => {
+    setEaten(prev => getCheckpoint(prev))
   }, [])
 
   // Easter egg curtain open animation
@@ -81,13 +103,12 @@ export default function LoginPage() {
     window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:8081'}/oauth2/authorization/google`
   }
 
-  // Progress bar width within current milestone segment
   const prevMilestone = MILESTONES[MILESTONES.indexOf(currentMilestone) - 1] ?? 0
   const segmentProgress = (eaten - prevMilestone) / (currentMilestone - prevMilestone)
 
   return (
     <div style={styles.page}>
-      <CarrotBackground onEat={handleEat} />
+      <CarrotBackground onEat={handleEat} onBomb={handleBomb} bombCount={bombCount} />
 
       {/* Counter */}
       <div style={styles.counterContainer}>
@@ -95,6 +116,11 @@ export default function LoginPage() {
         <div style={styles.counterText}>
           {eaten} / {currentMilestone}
         </div>
+        {bombCount > 0 && (
+          <div style={styles.bombIndicator}>
+            💣 x{bombCount}
+          </div>
+        )}
         <div style={styles.progressBarBg}>
           <div
             style={{
@@ -144,7 +170,6 @@ export default function LoginPage() {
               <div style={styles.easterEggEmoji}>🐰🥕</div>
               <div style={styles.easterEggTitle}>You are truly dedicated</div>
               <div style={styles.easterEggSub}>1024 carrots. Respect.</div>
-              {/* Placeholder image — replace later */}
               <img
                 src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200' fill='none'%3E%3Crect width='300' height='200' rx='16' fill='%23222'/%3E%3Ctext x='150' y='100' text-anchor='middle' dominant-baseline='central' font-size='64'%3E%F0%9F%90%B0%3C/text%3E%3C/svg%3E"
                 alt="Easter egg"
@@ -204,7 +229,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#666',
     opacity: 0.7,
   },
-  // Counter
   counterContainer: {
     position: 'fixed',
     top: '24px',
@@ -232,6 +256,13 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: 'monospace',
     letterSpacing: '0.05em',
   },
+  bombIndicator: {
+    fontSize: '0.85rem',
+    fontWeight: 600,
+    color: '#ff5555',
+    fontFamily: 'monospace',
+    marginLeft: 'auto',
+  },
   progressBarBg: {
     width: '100%',
     height: '4px',
@@ -245,7 +276,6 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '2px',
     transition: 'width 0.15s ease-out',
   },
-  // Easter egg
   curtain: {
     position: 'fixed',
     top: 0,

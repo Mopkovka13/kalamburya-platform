@@ -16,6 +16,18 @@ interface Carrot {
   eatTargetY: number
 }
 
+interface Bomb {
+  x: number
+  y: number
+  vx: number
+  vy: number
+  size: number
+  rotation: number
+  rotationSpeed: number
+  exploding: boolean
+  explodeProgress: number
+}
+
 interface Crumb {
   x: number
   y: number
@@ -30,12 +42,15 @@ interface Crumb {
 const CARROT_COUNT = 60
 const CONNECTION_DISTANCE = 180
 const EAT_RADIUS = 60
+const BOMB_RADIUS = 55
 const RABBIT_SIZE = 56
 const CARROT_FONT_SIZE = 44
+const BOMB_FONT_SIZE = 40
 const SPEED_RANGE = 0.5
+const BOMB_SPEED_RANGE = 0.7
 const EAT_DURATION = 30
+const EXPLODE_DURATION = 25
 
-// Pre-render an emoji to an offscreen canvas for fast drawImage
 function prerenderEmoji(emoji: string, size: number): HTMLCanvasElement {
   const pad = Math.ceil(size * 0.3)
   const dim = size + pad * 2
@@ -68,22 +83,55 @@ function createCarrot(w: number, h: number): Carrot {
   }
 }
 
-interface CarrotBackgroundProps {
-  onEat?: () => void
+function createBomb(w: number, h: number, mouseX: number, mouseY: number): Bomb {
+  // Spawn away from mouse
+  let x: number, y: number
+  for (let attempt = 0; attempt < 10; attempt++) {
+    x = 40 + Math.random() * (w - 80)
+    y = 40 + Math.random() * (h - 80)
+    const dx = x - mouseX
+    const dy = y - mouseY
+    if (dx * dx + dy * dy > 200 * 200) break
+  }
+  return {
+    x: x!,
+    y: y!,
+    vx: (Math.random() - 0.5) * BOMB_SPEED_RANGE * 2,
+    vy: (Math.random() - 0.5) * BOMB_SPEED_RANGE * 2,
+    size: BOMB_FONT_SIZE,
+    rotation: Math.random() * Math.PI * 2,
+    rotationSpeed: (Math.random() - 0.5) * 0.015,
+    exploding: false,
+    explodeProgress: 0,
+  }
 }
 
-export default function CarrotBackground({ onEat }: CarrotBackgroundProps) {
+interface CarrotBackgroundProps {
+  onEat?: () => void
+  onBomb?: () => void
+  bombCount: number
+}
+
+export default function CarrotBackground({ onEat, onBomb, bombCount }: CarrotBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const mouseRef = useRef({ x: -200, y: -200 })
   const carrotsRef = useRef<Carrot[]>([])
+  const bombsRef = useRef<Bomb[]>([])
   const crumbsRef = useRef<Crumb[]>([])
   const animRef = useRef<number>(0)
   const rabbitEatingRef = useRef(0)
+  const bombCountRef = useRef(bombCount)
+  const screenShakeRef = useRef(0)
+  const bombCooldownRef = useRef(0)
 
   // Cached emoji sprites
   const carrotSpriteRef = useRef<HTMLCanvasElement | null>(null)
   const rabbitSpriteRef = useRef<HTMLCanvasElement | null>(null)
+  const bombSpriteRef = useRef<HTMLCanvasElement | null>(null)
   const crumbSpritesRef = useRef<HTMLCanvasElement[]>([])
+
+  // Keep bombCount ref in sync
+  bombCountRef.current = bombCount
 
   const init = useCallback(() => {
     const canvas = canvasRef.current
@@ -93,10 +141,10 @@ export default function CarrotBackground({ onEat }: CarrotBackgroundProps) {
     carrotsRef.current = Array.from({ length: CARROT_COUNT }, () =>
       createCarrot(canvas.width, canvas.height),
     )
-    // Pre-render sprites once
+    bombsRef.current = []
     carrotSpriteRef.current = prerenderEmoji('🥕', CARROT_FONT_SIZE)
     rabbitSpriteRef.current = prerenderEmoji('🐰', RABBIT_SIZE)
-    // Crumb sizes: pre-render a few
+    bombSpriteRef.current = prerenderEmoji('💣', BOMB_FONT_SIZE)
     crumbSpritesRef.current = [8, 12, 16, 20].map(s => prerenderEmoji('🥕', s))
   }, [])
 
@@ -129,15 +177,47 @@ export default function CarrotBackground({ onEat }: CarrotBackgroundProps) {
       const w = canvas.width
       const h = canvas.height
       const carrots = carrotsRef.current
+      const bombs = bombsRef.current
       const mouse = mouseRef.current
       const carrotSprite = carrotSpriteRef.current
       const rabbitSprite = rabbitSpriteRef.current
-      if (!carrotSprite || !rabbitSprite) {
+      const bombSprite = bombSpriteRef.current
+      if (!carrotSprite || !rabbitSprite || !bombSprite) {
         animRef.current = requestAnimationFrame(animate)
         return
       }
 
-      ctx.clearRect(0, 0, w, h)
+      // --- Manage bomb count ---
+      const targetBombs = bombCountRef.current
+      const activeBombs = bombs.filter(b => !b.exploding).length
+      if (activeBombs < targetBombs) {
+        const toAdd = targetBombs - activeBombs
+        for (let i = 0; i < toAdd; i++) {
+          bombs.push(createBomb(w, h, mouse.x, mouse.y))
+        }
+      } else if (targetBombs < activeBombs) {
+        // Remove excess non-exploding bombs from the end
+        let toRemove = activeBombs - targetBombs
+        for (let i = bombs.length - 1; i >= 0 && toRemove > 0; i--) {
+          if (!bombs[i].exploding) {
+            bombs.splice(i, 1)
+            toRemove--
+          }
+        }
+      }
+
+      // --- Screen shake offset ---
+      let shakeX = 0, shakeY = 0
+      if (screenShakeRef.current > 0) {
+        const intensity = screenShakeRef.current * 0.6
+        shakeX = (Math.random() - 0.5) * intensity
+        shakeY = (Math.random() - 0.5) * intensity
+        screenShakeRef.current -= 1
+      }
+
+      ctx.save()
+      ctx.translate(shakeX, shakeY)
+      ctx.clearRect(-10, -10, w + 20, h + 20)
 
       // --- Update carrots ---
       for (const c of carrots) {
@@ -177,7 +257,6 @@ export default function CarrotBackground({ onEat }: CarrotBackgroundProps) {
           c.eatTargetY = mouse.y
           rabbitEatingRef.current = EAT_DURATION + 10
           onEat?.()
-          // Spawn crumbs — fewer for perf
           const count = 4 + Math.floor(Math.random() * 3)
           const crumbs = crumbsRef.current
           for (let i = 0; i < count; i++) {
@@ -187,12 +266,52 @@ export default function CarrotBackground({ onEat }: CarrotBackgroundProps) {
               x: c.x, y: c.y,
               vx: Math.cos(a) * spd, vy: Math.sin(a) * spd - 1,
               life: 1,
-              size: Math.floor(Math.random() * 4), // index into crumbSprites
+              size: Math.floor(Math.random() * 4),
               rotation: Math.random() * Math.PI * 2,
               rotationSpeed: (Math.random() - 0.5) * 0.3,
             })
           }
         }
+      }
+
+      // --- Update bombs ---
+      if (bombCooldownRef.current > 0) bombCooldownRef.current--
+      let hitBomb = false
+      let writeB = 0
+      for (let i = 0; i < bombs.length; i++) {
+        const b = bombs[i]
+        if (b.exploding) {
+          b.explodeProgress += 1 / EXPLODE_DURATION
+          if (b.explodeProgress >= 1) continue // remove
+          bombs[writeB++] = b
+          continue
+        }
+
+        b.x += b.vx
+        b.y += b.vy
+        b.rotation += b.rotationSpeed
+
+        if (b.x < 20 || b.x > w - 20) b.vx *= -1
+        if (b.y < 20 || b.y > h - 20) b.vy *= -1
+        b.x = Math.max(20, Math.min(w - 20, b.x))
+        b.y = Math.max(20, Math.min(h - 20, b.y))
+
+        const dx = b.x - mouse.x
+        const dy = b.y - mouse.y
+        const dist = Math.sqrt(dx * dx + dy * dy)
+        if (dist < BOMB_RADIUS && bombCooldownRef.current === 0 && !hitBomb) {
+          b.exploding = true
+          b.explodeProgress = 0
+          screenShakeRef.current = 20
+          hitBomb = true
+        }
+
+        bombs[writeB++] = b
+      }
+      bombs.length = writeB
+      if (hitBomb) {
+        bombCooldownRef.current = 60 // ~1 second immunity
+        onBomb?.()
       }
 
       // --- Update crumbs (in-place filter) ---
@@ -213,10 +332,8 @@ export default function CarrotBackground({ onEat }: CarrotBackgroundProps) {
       crumbs.length = writeIdx
 
       // --- Draw connections between nearby carrots ---
-      // Batch all connection lines in one path per style for less state changes
       ctx.lineCap = 'round'
 
-      // Carrot-to-carrot connections
       for (let i = 0; i < carrots.length; i++) {
         const a = carrots[i]
         if (a.eaten) continue
@@ -254,6 +371,24 @@ export default function CarrotBackground({ onEat }: CarrotBackgroundProps) {
           ctx.moveTo(mouse.x, mouse.y)
           ctx.lineTo(c.x, c.y)
           ctx.strokeStyle = `rgba(160, 230, 160, ${opacity * 0.5})`
+          ctx.lineWidth = 2 + opacity * 1.5
+          ctx.stroke()
+        }
+      }
+
+      // --- Draw danger connections from mouse to nearby bombs ---
+      for (const b of bombs) {
+        if (b.exploding) continue
+        const dx = b.x - mouse.x
+        const dy = b.y - mouse.y
+        const distSq = dx * dx + dy * dy
+        if (distSq < mouseConnDistSq) {
+          const dist = Math.sqrt(distSq)
+          const opacity = 1 - dist / mouseConnDist
+          ctx.beginPath()
+          ctx.moveTo(mouse.x, mouse.y)
+          ctx.lineTo(b.x, b.y)
+          ctx.strokeStyle = `rgba(255, 60, 60, ${opacity * 0.5})`
           ctx.lineWidth = 2 + opacity * 1.5
           ctx.stroke()
         }
@@ -304,6 +439,66 @@ export default function CarrotBackground({ onEat }: CarrotBackgroundProps) {
         ctx.restore()
       }
 
+      // --- Draw bombs ---
+      const halfBomb = bombSprite.width / 2
+      for (const b of bombs) {
+        if (b.exploding) {
+          // Explosion: expanding red ring + flash
+          const t = b.explodeProgress
+          const radius = t * 80
+          const alpha = 1 - t
+
+          ctx.save()
+          ctx.translate(b.x, b.y)
+
+          // Flash circle
+          ctx.beginPath()
+          ctx.arc(0, 0, radius, 0, Math.PI * 2)
+          ctx.fillStyle = `rgba(255, 80, 30, ${alpha * 0.4})`
+          ctx.fill()
+
+          // Ring
+          ctx.beginPath()
+          ctx.arc(0, 0, radius, 0, Math.PI * 2)
+          ctx.strokeStyle = `rgba(255, 50, 20, ${alpha * 0.8})`
+          ctx.lineWidth = 3 + (1 - t) * 4
+          ctx.stroke()
+
+          // Shrinking bomb
+          if (t < 0.4) {
+            const scale = 1 - t * 2.5
+            ctx.globalAlpha = scale
+            ctx.rotate(b.rotation + t * 12)
+            ctx.drawImage(bombSprite, -halfBomb * scale, -halfBomb * scale, bombSprite.width * scale, bombSprite.height * scale)
+          }
+          ctx.restore()
+          continue
+        }
+
+        const dx = b.x - mouse.x
+        const dy = b.y - mouse.y
+        const dist = Math.sqrt(dx * dx + dy * dy)
+
+        ctx.save()
+        // Red danger glow near mouse
+        if (dist < BOMB_RADIUS * 3) {
+          const glowIntensity = 1 - dist / (BOMB_RADIUS * 3)
+          ctx.shadowColor = `rgba(255, 40, 40, ${glowIntensity})`
+          ctx.shadowBlur = 35 * glowIntensity
+
+          const tremble = glowIntensity * 5
+          ctx.translate(
+            b.x + (Math.random() - 0.5) * tremble,
+            b.y + (Math.random() - 0.5) * tremble,
+          )
+        } else {
+          ctx.translate(b.x, b.y)
+        }
+        ctx.rotate(b.rotation)
+        ctx.drawImage(bombSprite, -halfBomb, -halfBomb)
+        ctx.restore()
+      }
+
       // --- Draw crumbs ---
       const crumbSprites = crumbSpritesRef.current
       for (const cr of crumbs) {
@@ -328,6 +523,8 @@ export default function CarrotBackground({ onEat }: CarrotBackgroundProps) {
           ctx.drawImage(rabbitSprite, mouse.x - halfRabbit, mouse.y - halfRabbit)
         }
       }
+
+      ctx.restore() // end screen shake transform
 
       animRef.current = requestAnimationFrame(animate)
     }
