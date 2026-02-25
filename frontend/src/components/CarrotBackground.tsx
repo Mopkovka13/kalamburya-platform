@@ -68,7 +68,11 @@ function createCarrot(w: number, h: number): Carrot {
   }
 }
 
-export default function CarrotBackground() {
+interface CarrotBackgroundProps {
+  onEat?: () => void
+}
+
+export default function CarrotBackground({ onEat }: CarrotBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const mouseRef = useRef({ x: -200, y: -200 })
   const carrotsRef = useRef<Carrot[]>([])
@@ -172,6 +176,7 @@ export default function CarrotBackground() {
           c.eatTargetX = mouse.x
           c.eatTargetY = mouse.y
           rabbitEatingRef.current = EAT_DURATION + 10
+          onEat?.()
           // Spawn crumbs — fewer for perf
           const count = 4 + Math.floor(Math.random() * 3)
           const crumbs = crumbsRef.current
